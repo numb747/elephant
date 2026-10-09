@@ -304,17 +304,25 @@ func Query(conn net.Conn, query string, runes []rune, _ bool, exact bool, _ uint
 			}
 		}
 
+		// local patch: clipboard search = case-insensitive substring, every
+		// whitespace-separated term must appear (AND); ranking stays by recency.
+		// Upstream used fzf fuzzy score minus match start, which drops any
+		// match deep inside long text (e.g. a word in the middle of a paragraph).
 		if query != "" {
-			score, pos, start := common.FuzzyScore(runes, v.Content, exact, slab)
-
-			e.Score = score
-			e.Fuzzyinfo = &pb.QueryResponse_Item_FuzzyInfo{
-				Field:     "text",
-				Positions: common.FuzzyPositionsToInt32(pos),
-				Start:     start,
+			haystack := strings.ToLower(v.Content)
+			if isURIList {
+				haystack = strings.ToLower(strings.Join(v.URIList, "\n"))
 			}
 
-			if e.Score > config.MinScore {
+			matched := true
+			for _, term := range strings.Fields(strings.ToLower(query)) {
+				if !strings.Contains(haystack, term) {
+					matched = false
+					break
+				}
+			}
+
+			if matched {
 				entries = append(entries, e)
 			}
 		} else {
@@ -322,7 +330,7 @@ func Query(conn net.Conn, query string, runes []rune, _ bool, exact bool, _ uint
 		}
 	}
 
-	if query == "" {
+	{
 		slices.SortStableFunc(entries, func(a, b *pb.QueryResponse_Item) int {
 			ta, _ := time.Parse(time.RFC1123Z, a.Subtext)
 			tb, _ := time.Parse(time.RFC1123Z, b.Subtext)
