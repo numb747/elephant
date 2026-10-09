@@ -150,8 +150,12 @@ func Query(conn net.Conn, query string, runes []rune, _ bool, exact bool, _ uint
 				}
 				pinsMu.RUnlock()
 
+				// Place the app right below its own window instead of halving its
+				// score, which let unrelated matches slip in between the two.
 				if query != "" && config.WindowIntegration && config.ScoreOpenWindows && hasWindow {
-					score = int32(score / 2)
+					if ws := appWindowScore(v, runes, slab, exact); ws > config.MinScore {
+						score = ws - 1
+					}
 				}
 
 				entries = append(entries, &pb.QueryResponse_Item{

@@ -257,15 +257,44 @@ func pinItem(identifier string) {
 	}
 }
 
-func appHasWindow(f *DesktopFile) (wl.ProxyId, bool) {
-	w := wlr.Windows()
+func isAppWindow(f *DesktopFile, v *wlr.Window) bool {
 	bin := strings.Fields(f.Exec)[0]
 
+	return v.AppID == f.StartupWMClass || v.AppID == f.Icon || v.AppID == bin || v.Title == bin
+}
+
+func appHasWindow(f *DesktopFile) (wl.ProxyId, bool) {
+	w := wlr.Windows()
+
 	for k, v := range w {
-		if v.AppID == f.StartupWMClass || v.AppID == f.Icon || v.AppID == bin || v.Title == bin {
+		if isAppWindow(f, v) {
 			return k, true
 		}
 	}
 
 	return wl.ProxyId(0), false
+}
+
+// appWindowScore returns the best score any of the app's windows gets for the
+// query, computed the same way as the windows provider does.
+func appWindowScore(f *DesktopFile, runes []rune, slab *common.FuzzySlab, exact bool) int32 {
+	var best int32
+
+	for _, v := range wlr.Windows() {
+		if !isAppWindow(f, v) {
+			continue
+		}
+
+		for _, s := range []string{v.Title, v.AppID} {
+			score, _, start := common.FuzzyScore(runes, s, exact, slab)
+
+			if score == 0 {
+				continue
+			}
+
+			best = max(best, max(score-start, 10))
+		}
+	}
+
+	return best
 }
