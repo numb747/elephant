@@ -21,6 +21,9 @@ import (
 type DesktopFile struct {
 	Data
 	Actions []Data
+	// ID is the desktop file ID (file name without .desktop), which by
+	// convention is also the app_id of the app's windows.
+	ID string
 }
 
 var (

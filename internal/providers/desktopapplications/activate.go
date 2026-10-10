@@ -260,7 +260,7 @@ func pinItem(identifier string) {
 func isAppWindow(f *DesktopFile, v *wlr.Window) bool {
 	bin := strings.Fields(f.Exec)[0]
 
-	return v.AppID == f.StartupWMClass || v.AppID == f.Icon || v.AppID == bin || v.Title == bin
+	return v.AppID == f.StartupWMClass || v.AppID == f.Icon || v.AppID == bin || v.Title == bin || f.ID != "" && v.AppID == f.ID
 }
 
 func appHasWindow(f *DesktopFile) (wl.ProxyId, bool) {
@@ -285,14 +285,21 @@ func appWindowScore(f *DesktopFile, runes []rune, slab *common.FuzzySlab, exact 
 			continue
 		}
 
+		// Same as the windows provider: take the field with the highest raw
+		// score, then subtract its start. Subtracting per field first gives
+		// a different (sometimes higher) result.
+		var raw, start int32
+
 		for _, s := range []string{v.Title, v.AppID} {
-			score, _, start := common.FuzzyScore(runes, s, exact, slab)
+			score, _, st := common.FuzzyScore(runes, s, exact, slab)
 
-			if score == 0 {
-				continue
+			if score > raw {
+				raw, start = score, st
 			}
+		}
 
-			best = max(best, max(score-start, 10))
+		if raw > 0 {
+			best = max(best, max(raw-start, 10))
 		}
 	}
 

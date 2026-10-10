@@ -86,14 +86,8 @@ func walkFunction(path string, d fs.DirEntry, err error) error {
 		return err
 	}
 
-	if filepath.Ext(path) == ".desktop" {
-		check := strings.TrimSuffix(filepath.Base(path), ".desktop")
-
-		for _, v := range br {
-			if v.MatchString(check) {
-				return nil
-			}
-		}
+	if filepath.Ext(path) == ".desktop" && isBlacklisted(path) {
+		return nil
 	}
 
 	filesMu.RLock()
@@ -293,7 +287,25 @@ func handleFileRemove(path string) {
 	}
 }
 
+func isBlacklisted(path string) bool {
+	check := strings.TrimSuffix(filepath.Base(path), ".desktop")
+
+	for _, v := range br {
+		if v.MatchString(check) {
+			return true
+		}
+	}
+
+	return false
+}
+
 func addNewEntry(path string) {
+	// Files created or rewritten after startup arrive here through the
+	// watcher, not walkFunction, so the blacklist has to be checked again.
+	if isBlacklisted(path) {
+		return
+	}
+
 	if origin, sym := isSymlink(path); sym {
 		// check the file the symlink points to actually exists
 		// otherwise it'll panic if you point to a location that's invalid
@@ -305,6 +317,7 @@ func addNewEntry(path string) {
 
 	filesMu.Lock()
 	if f, err := parseFile(path, langLocale, regionLocale); err == nil {
+		f.ID = strings.TrimSuffix(filepath.Base(path), ".desktop")
 		files[filepath.Base(path)] = f
 	} else {
 		slog.Error(Name, "parsing", err)
